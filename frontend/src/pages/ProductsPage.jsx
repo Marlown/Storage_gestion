@@ -5,7 +5,7 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // états du formulaire
+  // états du formulaire d'ajout
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [quantity, setQuantity] = useState(0);
@@ -15,7 +15,6 @@ export default function ProductsPage() {
 
   const API_BASE_URL = "http://localhost:3000";
 
-  // on factorise la récupération des produits pour la réutiliser
   async function fetchProducts() {
     try {
       setLoading(true);
@@ -71,17 +70,13 @@ export default function ProductsPage() {
         throw new Error(body.message || `Erreur API (${res.status})`);
       }
 
-      const created = await res.json();
-      console.log("Produit créé :", created);
+      await res.json();
 
       setFormSuccess("Produit ajouté avec succès ✅");
-
-      // on vide le formulaire
       setName("");
       setSku("");
       setQuantity(0);
 
-      // on recharge la liste des produits
       fetchProducts();
     } catch (err) {
       console.error(err);
@@ -91,8 +86,86 @@ export default function ProductsPage() {
     }
   }
 
+  // 🔧 SUPPRESSION
+  async function handleDelete(product) {
+    const confirmDelete = window.confirm(
+      `Supprimer le produit "${product.name}" ?`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/products/${product.id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || `Erreur API (${res.status})`);
+      }
+
+      await res.json();
+      fetchProducts();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Erreur lors de la suppression du produit.");
+    }
+  }
+
+  // 🔧 MODIFICATION (avec prompt pour aller vite)
+  async function handleEdit(product) {
+    const newName = window.prompt("Nouveau nom :", product.name);
+    if (newName === null) return; // annulé
+
+    const newSku = window.prompt("Nouveau SKU :", product.sku);
+    if (newSku === null) return;
+
+    const newQuantityStr = window.prompt(
+      "Nouvelle quantité :",
+      String(product.quantity)
+    );
+    if (newQuantityStr === null) return;
+
+    const newQuantity = Number(newQuantityStr);
+    if (Number.isNaN(newQuantity) || newQuantity < 0) {
+      alert("Quantité invalide.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/products/${product.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: newName.trim(),
+          sku: newSku.trim(),
+          quantity: newQuantity,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || `Erreur API (${res.status})`);
+      }
+
+      await res.json();
+      fetchProducts();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Erreur lors de la mise à jour du produit.");
+    }
+  }
+
   return (
-    <div style={{ padding: "24px", fontFamily: "system-ui", maxWidth: "900px", margin: "0 auto" }}>
+    <div
+      style={{
+        padding: "24px",
+        fontFamily: "system-ui",
+        maxWidth: "900px",
+        margin: "0 auto",
+      }}
+    >
       <h1 style={{ marginBottom: "16px" }}>📦 Produits en stock</h1>
 
       {/* Formulaire d'ajout */}
@@ -105,7 +178,9 @@ export default function ProductsPage() {
           background: "#fafafa",
         }}
       >
-        <h2 style={{ marginBottom: "12px", fontSize: "18px" }}>➕ Ajouter un produit</h2>
+        <h2 style={{ marginBottom: "12px", fontSize: "18px" }}>
+          ➕ Ajouter un produit
+        </h2>
 
         {formError && (
           <p style={{ color: "red", marginBottom: "8px" }}>{formError}</p>
@@ -114,8 +189,13 @@ export default function ProductsPage() {
           <p style={{ color: "green", marginBottom: "8px" }}>{formSuccess}</p>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: "grid", gap: "8px", maxWidth: "400px" }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: "grid", gap: "8px", maxWidth: "400px" }}
+        >
+          <label
+            style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+          >
             <span>Nom *</span>
             <input
               type="text"
@@ -126,7 +206,9 @@ export default function ProductsPage() {
             />
           </label>
 
-          <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <label
+            style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+          >
             <span>SKU *</span>
             <input
               type="text"
@@ -137,7 +219,9 @@ export default function ProductsPage() {
             />
           </label>
 
-          <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <label
+            style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+          >
             <span>Quantité</span>
             <input
               type="number"
@@ -187,6 +271,7 @@ export default function ProductsPage() {
                   <th style={thStyle}>Nom</th>
                   <th style={thStyle}>SKU</th>
                   <th style={thStyle}>Quantité</th>
+                  <th style={thStyle}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -196,6 +281,20 @@ export default function ProductsPage() {
                     <td style={tdStyle}>{p.name}</td>
                     <td style={tdStyle}>{p.sku}</td>
                     <td style={tdStyle}>{p.quantity}</td>
+                    <td style={tdStyle}>
+                      <button
+                        onClick={() => handleEdit(p)}
+                        style={actionButtonStyle}
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        onClick={() => handleDelete(p)}
+                        style={{ ...actionButtonStyle, background: "#dc2626" }}
+                      >
+                        Supprimer
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -224,4 +323,15 @@ const inputStyle = {
   borderRadius: "4px",
   border: "1px solid #ccc",
   fontSize: "14px",
+};
+
+const actionButtonStyle = {
+  padding: "4px 8px",
+  marginRight: "6px",
+  borderRadius: "4px",
+  border: "none",
+  cursor: "pointer",
+  background: "#0f766e",
+  color: "white",
+  fontSize: "12px",
 };
