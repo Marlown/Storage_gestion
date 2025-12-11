@@ -23,6 +23,19 @@ services:
     depends_on:
       - prometheus
     restart: unless-stopped
+  postgres:
+    image: postgres:16
+    container_name: stock-postgres
+    environment:
+      - POSTGRES_USER=stock_user
+      - POSTGRES_PASSWORD=stock_password
+      - POSTGRES_DB=stock_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
 
 volumes:
   grafana-data:
+  postgres-data:
