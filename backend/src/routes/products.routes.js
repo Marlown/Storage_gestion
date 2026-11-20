@@ -59,6 +59,11 @@ router.post("/", async (req, res) => {
 
     return res.status(201).json(newProduct);
   } catch (err) {
+    if (err.code === "23505") {
+      return res
+        .status(409)
+        .json({ message: "Un produit avec ce SKU existe déjà." });
+    }
     console.error("Erreur sur POST /api/products :", err);
     apiErrorCounter.labels("POST", "/api/products", "db").inc();
     res
@@ -71,6 +76,9 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: "Identifiant invalide." });
+    }
     const { name, sku, quantity } = req.body;
 
     if (!name || !sku) {
@@ -103,6 +111,11 @@ router.put("/:id", async (req, res) => {
     const updated = result.rows[0];
     return res.status(200).json(updated);
   } catch (err) {
+    if (err.code === "23505") {
+      return res
+        .status(409)
+        .json({ message: "Un produit avec ce SKU existe déjà." });
+    }
     console.error("Erreur sur PUT /api/products/:id :", err);
     apiErrorCounter.labels("PUT", "/api/products/:id", "db").inc();
     res
@@ -115,6 +128,9 @@ router.put("/:id", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: "Identifiant invalide." });
+    }
 
     const deleteQuery = `
       DELETE FROM products

@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 dotenv.config();
 
+import pool from "./db.js";
 import productsRouter from "./routes/products.routes.js";
 import stocksRouter from "./routes/stocks.routes.js";
 import {
@@ -44,6 +45,16 @@ app.use("/api/stocks", stocksRouter);
 
 app.get("/", (req, res) => {
   res.json({ message: "API Stock OK ✅" });
+});
+
+// Vérifie que l'API et la base répondent
+app.get("/health", async (req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    res.json({ status: "ok", database: "ok" });
+  } catch (err) {
+    res.status(503).json({ status: "error", database: "unreachable" });
+  }
 });
 
 // /metrics pour Prometheus
