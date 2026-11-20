@@ -36,7 +36,14 @@ export default function MovementsPage({ productId, onProductChange }) {
     <div>
       <h1 style={{ marginBottom: "16px" }}>🔁 Mouvements de stock</h1>
 
-      <label style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "16px" }}>
+      <label
+        style={{
+          display: "flex",
+          gap: "8px",
+          alignItems: "center",
+          marginBottom: "16px",
+        }}
+      >
         <span>Produit :</span>
         <select
           value={productId ?? ""}

@@ -43,12 +43,26 @@ const lowStockGauge = new client.Gauge({
   help: "Nombre de produits en rupture ou sous leur seuil d'alerte",
 });
 
+// 🔹 Caisse : nombre de ventes et chiffre d'affaires (FCFA), par moyen de paiement
+const salesCounter = new client.Counter({
+  name: "stock_sales_total",
+  help: "Nombre de ventes enregistrées en caisse",
+  labelNames: ["payment_method"],
+});
+const salesRevenueCounter = new client.Counter({
+  name: "stock_sales_revenue_fcfa_total",
+  help: "Chiffre d'affaires encaissé, en FCFA",
+  labelNames: ["payment_method"],
+});
+
 // Enregistrer les métriques dans le registre
 register.registerMetric(httpRequestDuration);
 register.registerMetric(httpRequestCounter);
 register.registerMetric(apiErrorCounter);
 register.registerMetric(productsCountGauge);
 register.registerMetric(lowStockGauge);
+register.registerMetric(salesCounter);
+register.registerMetric(salesRevenueCounter);
 
 export {
   register,
@@ -57,4 +71,6 @@ export {
   apiErrorCounter,
   productsCountGauge,
   lowStockGauge,
+  salesCounter,
+  salesRevenueCounter,
 };

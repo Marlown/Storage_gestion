@@ -5,19 +5,26 @@ import {
   lowStockGauge,
   apiErrorCounter,
 } from "../metrics.js";
+import { DEFAULT_VAT_RATE, parseVatRate } from "../vat.js";
 
 // En alerte : rupture, ou quantité au niveau du seuil ou en dessous
 const isLowStock = (p) =>
   p.quantity === 0 || (p.minQuantity > 0 && p.quantity <= p.minQuantity);
 
-// Lit le seuil d'alerte ; renvoie null si invalide
-function parseMinQuantity(value) {
+// Lit un entier >= 0 (seuil d'alerte, prix) ; renvoie null si invalide
+function parseNonNegativeInt(value) {
   const n = Number(value ?? 0);
   return Number.isInteger(n) && n >= 0 ? n : null;
 }
 
 const MIN_QTY_ERROR = {
   message: "Le champ 'minQuantity' doit être un entier >= 0.",
+};
+const VAT_ERROR = {
+  message: "Le champ 'vatRate' doit être un taux entre 0 et 100 (ex : 18).",
+};
+const PRICE_ERROR = {
+  message: "Le champ 'price' doit être un entier >= 0 (en FCFA).",
 };
 
 const router = express.Router();
@@ -26,7 +33,7 @@ const router = express.Router();
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, name, sku, quantity, min_quantity AS "minQuantity" FROM products ORDER BY id ASC'
+      'SELECT id, name, sku, quantity, min_quantity AS "minQuantity", price, vat_rate::float AS "vatRate" FROM products ORDER BY id ASC'
     );
     const products = result.rows;
 
@@ -48,7 +55,12 @@ router.post("/", async (req, res) => {
   const name = String(req.body.name ?? "").trim();
   const sku = String(req.body.sku ?? "").trim();
   const qty = Number(req.body.quantity ?? 0);
-  const minQty = parseMinQuantity(req.body.minQuantity);
+  const minQty = parseNonNegativeInt(req.body.minQuantity);
+  const price = parseNonNegativeInt(req.body.price);
+  const vatRate =
+    req.body.vatRate === undefined
+      ? DEFAULT_VAT_RATE
+      : parseVatRate(req.body.vatRate);
 
   if (!name || !sku) {
     return res
@@ -63,16 +75,22 @@ router.post("/", async (req, res) => {
   if (minQty === null) {
     return res.status(400).json(MIN_QTY_ERROR);
   }
+  if (price === null) {
+    return res.status(400).json(PRICE_ERROR);
+  }
+  if (vatRate === null) {
+    return res.status(400).json(VAT_ERROR);
+  }
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
     const result = await client.query(
-      `INSERT INTO products (name, sku, quantity, min_quantity)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, name, sku, quantity, min_quantity AS "minQuantity"`,
-      [name, sku, qty, minQty]
+      `INSERT INTO products (name, sku, quantity, min_quantity, price, vat_rate)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, name, sku, quantity, min_quantity AS "minQuantity", price, vat_rate::float AS "vatRate"`,
+      [name, sku, qty, minQty, price, vatRate]
     );
     const newProduct = result.rows[0];
 
@@ -111,7 +129,8 @@ router.post("/", async (req, res) => {
 });
 
 // PUT /api/products/:id
-// Modifie le nom, le SKU et le seuil d'alerte (minQuantity, facultatif).
+// Modifie le nom, le SKU, et si fournis le seuil d'alerte (minQuantity),
+// le prix TTC (price) et le taux de TVA (vatRate).
 // Ne modifie jamais la quantité : la quantité ne change que par des
 // mouvements de stock (POST /api/stocks/movements), pour garder un historique fiable.
 router.put("/:id", async (req, res) => {
@@ -125,7 +144,13 @@ router.put("/:id", async (req, res) => {
     const minQty =
       req.body.minQuantity === undefined
         ? undefined
-        : parseMinQuantity(req.body.minQuantity);
+        : parseNonNegativeInt(req.body.minQuantity);
+    const price =
+      req.body.price === undefined
+        ? undefined
+        : parseNonNegativeInt(req.body.price);
+    const vatRate =
+      req.body.vatRate === undefined ? undefined : parseVatRate(req.body.vatRate);
 
     if (!name || !sku) {
       return res
@@ -135,13 +160,22 @@ router.put("/:id", async (req, res) => {
     if (minQty === null) {
       return res.status(400).json(MIN_QTY_ERROR);
     }
+    if (price === null) {
+      return res.status(400).json(PRICE_ERROR);
+    }
+    if (vatRate === null) {
+      return res.status(400).json(VAT_ERROR);
+    }
 
     const result = await pool.query(
       `UPDATE products
-       SET name = $1, sku = $2, min_quantity = COALESCE($4, min_quantity)
+       SET name = $1, sku = $2,
+           min_quantity = COALESCE($4, min_quantity),
+           price = COALESCE($5, price),
+           vat_rate = COALESCE($6, vat_rate)
        WHERE id = $3
-       RETURNING id, name, sku, quantity, min_quantity AS "minQuantity"`,
-      [name, sku, id, minQty ?? null]
+       RETURNING id, name, sku, quantity, min_quantity AS "minQuantity", price, vat_rate::float AS "vatRate"`,
+      [name, sku, id, minQty ?? null, price ?? null, vatRate ?? null]
     );
 
     if (result.rowCount === 0) {
@@ -174,7 +208,7 @@ router.delete("/:id", async (req, res) => {
     const deleteQuery = `
       DELETE FROM products
       WHERE id = $1
-      RETURNING id, name, sku, quantity, min_quantity AS "minQuantity"
+      RETURNING id, name, sku, quantity, min_quantity AS "minQuantity", price, vat_rate::float AS "vatRate"
     `;
     const result = await pool.query(deleteQuery, [id]);
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { apiFetch } from "../api";
+import { formatFCFA, splitTtc } from "../money";
 import {
   overlayStyle,
   dialogStyle,
@@ -15,14 +16,20 @@ export default function EditProductDialog({ product, onClose, onDone }) {
   const [name, setName] = useState(product.name);
   const [sku, setSku] = useState(product.sku);
   const [minQuantity, setMinQuantity] = useState(product.minQuantity);
+  const [price, setPrice] = useState(product.price);
+  const [vatRate, setVatRate] = useState(product.vatRate);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   const minQty = Number(minQuantity);
+  const priceNum = Number(price);
+  const rateNum = Number(vatRate);
   const unchanged =
     name.trim() === product.name &&
     sku.trim() === product.sku &&
-    minQty === product.minQuantity;
+    minQty === product.minQuantity &&
+    priceNum === product.price &&
+    rateNum === product.vatRate;
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -34,6 +41,14 @@ export default function EditProductDialog({ product, onClose, onDone }) {
     }
     if (!Number.isInteger(minQty) || minQty < 0) {
       setError("Le seuil d'alerte doit être un nombre entier >= 0.");
+      return;
+    }
+    if (!Number.isInteger(priceNum) || priceNum < 0) {
+      setError("Le prix doit être un nombre entier de FCFA >= 0.");
+      return;
+    }
+    if (!(rateNum >= 0 && rateNum < 100)) {
+      setError("Le taux de TVA doit être compris entre 0 et 100.");
       return;
     }
     if (unchanged) {
@@ -49,6 +64,8 @@ export default function EditProductDialog({ product, onClose, onDone }) {
           name: name.trim(),
           sku: sku.trim(),
           minQuantity: minQty,
+          price: priceNum,
+          vatRate: rateNum,
         }),
       });
       onDone();
@@ -101,6 +118,44 @@ export default function EditProductDialog({ product, onClose, onDone }) {
               style={inputStyle}
             />
           </label>
+
+          <div style={{ display: "flex", gap: "8px" }}>
+            <label style={{ ...labelStyle, flex: 2 }}>
+              <span>Prix TTC (FCFA)</span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={price}
+                onChange={(e) => {
+                  setPrice(e.target.value);
+                  setError("");
+                }}
+                style={inputStyle}
+              />
+            </label>
+            <label style={{ ...labelStyle, flex: 1 }}>
+              <span>TVA (%)</span>
+              <input
+                type="number"
+                min={0}
+                max={99}
+                step={0.01}
+                value={vatRate}
+                onChange={(e) => {
+                  setVatRate(e.target.value);
+                  setError("");
+                }}
+                style={inputStyle}
+              />
+            </label>
+          </div>
+          {priceNum > 0 && rateNum >= 0 && (
+            <small style={{ color: "#555", marginTop: "-6px" }}>
+              Soit {formatFCFA(splitTtc(priceNum, rateNum).ht)} HT +{" "}
+              {formatFCFA(splitTtc(priceNum, rateNum).vat)} de TVA
+            </small>
+          )}
 
           <label style={labelStyle}>
             <span>Seuil d'alerte</span>

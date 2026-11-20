@@ -5,6 +5,7 @@ import EditProductDialog from "../components/EditProductDialog";
 import InventoryDialog from "../components/InventoryDialog";
 import StockSummary from "../components/StockSummary";
 import { matchesSearch, stockStatus } from "../stock";
+import { formatFCFA, formatRate, splitTtc } from "../money";
 
 export default function ProductsPage({ onShowHistory }) {
   const [products, setProducts] = useState([]);
@@ -16,6 +17,8 @@ export default function ProductsPage({ onShowHistory }) {
   const [sku, setSku] = useState("");
   const [quantity, setQuantity] = useState(0);
   const [minQuantity, setMinQuantity] = useState(0);
+  const [price, setPrice] = useState(0);
+  const [vatRate, setVatRate] = useState(18);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
@@ -86,6 +89,8 @@ export default function ProductsPage({ onShowHistory }) {
           sku: sku.trim(),
           quantity: Number(quantity) || 0,
           minQuantity: Number(minQuantity) || 0,
+          price: Number(price) || 0,
+          vatRate: Number(vatRate) || 0,
         }),
       });
 
@@ -101,6 +106,7 @@ export default function ProductsPage({ onShowHistory }) {
       setSku("");
       setQuantity(0);
       setMinQuantity(0);
+      setPrice(0);
 
       fetchProducts();
     } catch (err) {
@@ -257,6 +263,54 @@ export default function ProductsPage({ onShowHistory }) {
             />
           </label>
 
+          <div style={{ display: "flex", gap: "8px" }}>
+            <label
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px",
+                flex: 2,
+              }}
+            >
+              <span>Prix de vente TTC (FCFA)</span>
+              <input
+                type="number"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                style={inputStyle}
+                min={0}
+                step={1}
+              />
+            </label>
+            <label
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px",
+                flex: 1,
+              }}
+            >
+              <span>TVA (%)</span>
+              <input
+                type="number"
+                value={vatRate}
+                onChange={(e) => setVatRate(e.target.value)}
+                style={inputStyle}
+                min={0}
+                max={99}
+                step={0.01}
+              />
+            </label>
+          </div>
+          {Number(price) > 0 && (
+            <small style={{ opacity: 0.7, marginTop: "-4px" }}>
+              Soit{" "}
+              {formatFCFA(splitTtc(Number(price), Number(vatRate) || 0).ht)} HT
+              + {formatFCFA(splitTtc(Number(price), Number(vatRate) || 0).vat)}{" "}
+              de TVA
+            </small>
+          )}
+
           <label
             style={{ display: "flex", flexDirection: "column", gap: "4px" }}
           >
@@ -370,6 +424,7 @@ export default function ProductsPage({ onShowHistory }) {
                       <th style={thStyle}>ID</th>
                       <th style={thStyle}>Nom</th>
                       <th style={thStyle}>SKU</th>
+                      <th style={thStyle}>Prix TTC</th>
                       <th style={thStyle}>Quantité</th>
                       <th style={thStyle}>Seuil</th>
                       <th style={thStyle}>Actions</th>
@@ -381,6 +436,13 @@ export default function ProductsPage({ onShowHistory }) {
                         <td style={tdStyle}>{p.id}</td>
                         <td style={tdStyle}>{p.name}</td>
                         <td style={tdStyle}>{p.sku}</td>
+                        <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                          {p.price > 0 ? formatFCFA(p.price) : "—"}
+                          <br />
+                          <small style={{ opacity: 0.6 }}>
+                            TVA {formatRate(p.vatRate)}
+                          </small>
+                        </td>
                         <td style={tdStyle}>
                           <strong>{p.quantity}</strong>{" "}
                           {stockStatus(p) === "out" && (

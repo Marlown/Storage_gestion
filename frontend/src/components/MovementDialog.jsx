@@ -72,7 +72,9 @@ export default function MovementDialog({ product, type, onClose, onDone }) {
           <strong>{product.quantity}</strong>
         </p>
 
-        {error && <p style={{ color: "#dc2626", margin: "0 0 12px" }}>{error}</p>}
+        {error && (
+          <p style={{ color: "#dc2626", margin: "0 0 12px" }}>{error}</p>
+        )}
 
         <form onSubmit={handleSubmit} style={{ display: "grid", gap: "12px" }}>
           <label style={labelStyle}>
@@ -98,7 +100,9 @@ export default function MovementDialog({ product, type, onClose, onDone }) {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               style={inputStyle}
-              placeholder={isIn ? "Ex : livraison fournisseur" : "Ex : vente, casse…"}
+              placeholder={
+                isIn ? "Ex : livraison fournisseur" : "Ex : vente, casse…"
+              }
             />
           </label>
 
@@ -108,7 +112,9 @@ export default function MovementDialog({ product, type, onClose, onDone }) {
             </p>
           )}
 
-          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+          <div
+            style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}
+          >
             <button type="button" onClick={onClose} style={secondaryButton}>
               Annuler
             </button>

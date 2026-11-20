@@ -1,6 +1,8 @@
 import { useState } from "react";
 import ProductsPage from "./pages/ProductsPage";
 import MovementsPage from "./pages/MovementsPage";
+import CashierPage from "./pages/CashierPage";
+import SalesPage from "./pages/SalesPage";
 
 function App() {
   const [page, setPage] = useState("products");
@@ -20,7 +22,27 @@ function App() {
         margin: "0 auto",
       }}
     >
-      <nav style={{ display: "flex", gap: "8px", marginBottom: "24px" }}>
+      <nav
+        className="no-print"
+        style={{
+          display: "flex",
+          gap: "8px",
+          flexWrap: "wrap",
+          marginBottom: "24px",
+        }}
+      >
+        <button
+          onClick={() => setPage("cashier")}
+          style={tabStyle(page === "cashier")}
+        >
+          🧾 Caisse
+        </button>
+        <button
+          onClick={() => setPage("sales")}
+          style={tabStyle(page === "sales")}
+        >
+          💰 Ventes
+        </button>
         <button
           onClick={() => setPage("products")}
           style={tabStyle(page === "products")}
@@ -38,9 +60,10 @@ function App() {
         </button>
       </nav>
 
-      {page === "products" ? (
-        <ProductsPage onShowHistory={showHistory} />
-      ) : (
+      {page === "cashier" && <CashierPage />}
+      {page === "sales" && <SalesPage />}
+      {page === "products" && <ProductsPage onShowHistory={showHistory} />}
+      {page === "movements" && (
         <MovementsPage
           productId={movementsProductId}
           onProductChange={setMovementsProductId}

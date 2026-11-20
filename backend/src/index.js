@@ -6,6 +6,7 @@ dotenv.config();
 import pool from "./db.js";
 import productsRouter from "./routes/products.routes.js";
 import stocksRouter from "./routes/stocks.routes.js";
+import salesRouter from "./routes/sales.routes.js";
 import {
   register,
   httpRequestDuration,
@@ -42,6 +43,7 @@ app.use((req, res, next) => {
 // Routes métier
 app.use("/api/products", productsRouter);
 app.use("/api/stocks", stocksRouter);
+app.use("/api/sales", salesRouter);
 
 app.get("/", (req, res) => {
   res.json({ message: "API Stock OK ✅" });
