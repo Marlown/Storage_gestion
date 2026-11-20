@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { API_BASE_URL } from "../api";
+import MovementDialog from "../components/MovementDialog";
 
-export default function ProductsPage() {
+export default function ProductsPage({ onShowHistory }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -13,10 +15,10 @@ export default function ProductsPage() {
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
 
-  const API_BASE_URL =
-    import.meta.env.VITE_API_URL || "http://localhost:3000";
+  // mouvement de stock en cours de saisie : { product, type: "IN" | "OUT" }
+  const [movement, setMovement] = useState(null);
 
-  async function fetchProducts() {
+  const fetchProducts = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
@@ -35,11 +37,11 @@ export default function ProductsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     fetchProducts();
-  }, []);
+  }, [fetchProducts]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -159,14 +161,19 @@ export default function ProductsPage() {
   }
 
   return (
-    <div
-      style={{
-        padding: "24px",
-        fontFamily: "system-ui",
-        maxWidth: "900px",
-        margin: "0 auto",
-      }}
-    >
+    <div>
+      {movement && (
+        <MovementDialog
+          product={movement.product}
+          type={movement.type}
+          onClose={() => setMovement(null)}
+          onDone={() => {
+            setMovement(null);
+            fetchProducts();
+          }}
+        />
+      )}
+
       <h1 style={{ marginBottom: "16px" }}>📦 Produits en stock</h1>
 
       {/* Formulaire d'ajout */}
@@ -282,7 +289,33 @@ export default function ProductsPage() {
                     <td style={tdStyle}>{p.name}</td>
                     <td style={tdStyle}>{p.sku}</td>
                     <td style={tdStyle}>{p.quantity}</td>
-                    <td style={tdStyle}>
+                    <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                      <button
+                        onClick={() => setMovement({ product: p, type: "IN" })}
+                        style={{ ...actionButtonStyle, background: "#16a34a" }}
+                        title="Entrée de stock"
+                      >
+                        + Entrée
+                      </button>
+                      <button
+                        onClick={() => setMovement({ product: p, type: "OUT" })}
+                        style={{
+                          ...actionButtonStyle,
+                          background: "#ea580c",
+                          opacity: p.quantity === 0 ? 0.4 : 1,
+                          cursor: p.quantity === 0 ? "not-allowed" : "pointer",
+                        }}
+                        title={p.quantity === 0 ? "Stock vide" : "Sortie de stock"}
+                        disabled={p.quantity === 0}
+                      >
+                        − Sortie
+                      </button>
+                      <button
+                        onClick={() => onShowHistory(p.id)}
+                        style={{ ...actionButtonStyle, background: "#4b5563" }}
+                      >
+                        Historique
+                      </button>
                       <button
                         onClick={() => handleEdit(p)}
                         style={actionButtonStyle}
