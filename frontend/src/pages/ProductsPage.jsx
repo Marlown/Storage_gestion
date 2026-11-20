@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { API_BASE_URL } from "../api";
 import MovementDialog from "../components/MovementDialog";
+import EditProductDialog from "../components/EditProductDialog";
 
 export default function ProductsPage({ onShowHistory }) {
   const [products, setProducts] = useState([]);
@@ -17,6 +18,8 @@ export default function ProductsPage({ onShowHistory }) {
 
   // mouvement de stock en cours de saisie : { product, type: "IN" | "OUT" }
   const [movement, setMovement] = useState(null);
+  // produit en cours de modification
+  const [editing, setEditing] = useState(null);
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -114,52 +117,6 @@ export default function ProductsPage({ onShowHistory }) {
     }
   }
 
-  // 🔧 MODIFICATION (avec prompt pour aller vite)
-  async function handleEdit(product) {
-    const newName = window.prompt("Nouveau nom :", product.name);
-    if (newName === null) return; // annulé
-
-    const newSku = window.prompt("Nouveau SKU :", product.sku);
-    if (newSku === null) return;
-
-    const newQuantityStr = window.prompt(
-      "Nouvelle quantité :",
-      String(product.quantity)
-    );
-    if (newQuantityStr === null) return;
-
-    const newQuantity = Number(newQuantityStr);
-    if (Number.isNaN(newQuantity) || newQuantity < 0) {
-      alert("Quantité invalide.");
-      return;
-    }
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/products/${product.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: newName.trim(),
-          sku: newSku.trim(),
-          quantity: newQuantity,
-        }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || `Erreur API (${res.status})`);
-      }
-
-      await res.json();
-      fetchProducts();
-    } catch (err) {
-      console.error(err);
-      alert(err.message || "Erreur lors de la mise à jour du produit.");
-    }
-  }
-
   return (
     <div>
       {movement && (
@@ -169,6 +126,17 @@ export default function ProductsPage({ onShowHistory }) {
           onClose={() => setMovement(null)}
           onDone={() => {
             setMovement(null);
+            fetchProducts();
+          }}
+        />
+      )}
+
+      {editing && (
+        <EditProductDialog
+          product={editing}
+          onClose={() => setEditing(null)}
+          onDone={() => {
+            setEditing(null);
             fetchProducts();
           }}
         />
@@ -230,7 +198,7 @@ export default function ProductsPage({ onShowHistory }) {
           <label
             style={{ display: "flex", flexDirection: "column", gap: "4px" }}
           >
-            <span>Quantité</span>
+            <span>Stock initial</span>
             <input
               type="number"
               value={quantity}
@@ -317,7 +285,7 @@ export default function ProductsPage({ onShowHistory }) {
                         Historique
                       </button>
                       <button
-                        onClick={() => handleEdit(p)}
+                        onClick={() => setEditing(p)}
                         style={actionButtonStyle}
                       >
                         Modifier

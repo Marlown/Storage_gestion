@@ -37,8 +37,8 @@ Application web de gestion de stock (quantité et qualité) pour une distributio
 | Méthode | Route                       | Description                         |
 |---------|-----------------------------|-------------------------------------|
 | GET     | `/api/products`             | Liste des produits                  |
-| POST    | `/api/products`             | Créer un produit (`name`, `sku`, `quantity`) |
-| PUT     | `/api/products/:id`         | Modifier un produit                 |
+| POST    | `/api/products`             | Créer un produit (`name`, `sku`, `quantity` = stock initial, tracé en mouvement) |
+| PUT     | `/api/products/:id`         | Modifier le nom et le SKU (la quantité passe par les mouvements) |
 | DELETE  | `/api/products/:id`         | Supprimer un produit (et ses mouvements) |
 | GET     | `/api/stocks/movements`     | Historique (`?productId=` optionnel) |
 | POST    | `/api/stocks/movements`     | Entrée/sortie (`productId`, `type` IN/OUT, `quantity`, `reason`) |

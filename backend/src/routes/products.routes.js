@@ -26,39 +26,52 @@ router.get("/", async (req, res) => {
 
 // POST /api/products
 router.post("/", async (req, res) => {
+  const name = String(req.body.name ?? "").trim();
+  const sku = String(req.body.sku ?? "").trim();
+  const qty = Number(req.body.quantity ?? 0);
+
+  if (!name || !sku) {
+    return res
+      .status(400)
+      .json({ message: "Les champs 'name' et 'sku' sont obligatoires." });
+  }
+  if (!Number.isInteger(qty) || qty < 0) {
+    return res
+      .status(400)
+      .json({ message: "Le champ 'quantity' doit être un entier >= 0." });
+  }
+
+  const client = await pool.connect();
   try {
-    const { name, sku, quantity } = req.body;
+    await client.query("BEGIN");
 
-    if (!name || !sku) {
-      return res
-        .status(400)
-        .json({ message: "Les champs 'name' et 'sku' sont obligatoires." });
-    }
-
-    const qty = Number(quantity ?? 0);
-    if (Number.isNaN(qty) || qty < 0) {
-      return res
-        .status(400)
-        .json({ message: "Le champ 'quantity' doit être un nombre >= 0." });
-    }
-
-    const insertQuery = `
-      INSERT INTO products (name, sku, quantity)
-      VALUES ($1, $2, $3)
-      RETURNING id, name, sku, quantity
-    `;
-    const values = [name.trim(), sku.trim(), qty];
-
-    const result = await pool.query(insertQuery, values);
+    const result = await client.query(
+      `INSERT INTO products (name, sku, quantity)
+       VALUES ($1, $2, $3)
+       RETURNING id, name, sku, quantity`,
+      [name, sku, qty]
+    );
     const newProduct = result.rows[0];
+
+    // le stock de départ est tracé comme une entrée, pour que l'historique
+    // explique toujours la quantité actuelle
+    if (qty > 0) {
+      await client.query(
+        `INSERT INTO stock_movements (product_id, type, quantity, reason, new_quantity)
+         VALUES ($1, 'IN', $2, 'Stock initial', $2)`,
+        [newProduct.id, qty]
+      );
+    }
+
+    await client.query("COMMIT");
 
     // mettre à jour la gauge
     const countResult = await pool.query("SELECT COUNT(*) FROM products");
-    const total = Number(countResult.rows[0].count);
-    productsCountGauge.set(total);
+    productsCountGauge.set(Number(countResult.rows[0].count));
 
     return res.status(201).json(newProduct);
   } catch (err) {
+    await client.query("ROLLBACK");
     if (err.code === "23505") {
       return res
         .status(409)
@@ -69,17 +82,22 @@ router.post("/", async (req, res) => {
     res
       .status(500)
       .json({ message: "Erreur interne sur l'ajout d'un produit" });
+  } finally {
+    client.release();
   }
 });
 
 // PUT /api/products/:id
+// Modifie le nom et le SKU uniquement : la quantité ne change que par des
+// mouvements de stock (POST /api/stocks/movements), pour garder un historique fiable.
 router.put("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
       return res.status(400).json({ message: "Identifiant invalide." });
     }
-    const { name, sku, quantity } = req.body;
+    const name = String(req.body.name ?? "").trim();
+    const sku = String(req.body.sku ?? "").trim();
 
     if (!name || !sku) {
       return res
@@ -87,29 +105,19 @@ router.put("/:id", async (req, res) => {
         .json({ message: "Les champs 'name' et 'sku' sont obligatoires." });
     }
 
-    const qty = Number(quantity ?? 0);
-    if (Number.isNaN(qty) || qty < 0) {
-      return res
-        .status(400)
-        .json({ message: "Le champ 'quantity' doit être un nombre >= 0." });
-    }
-
-    const updateQuery = `
-      UPDATE products
-      SET name = $1, sku = $2, quantity = $3
-      WHERE id = $4
-      RETURNING id, name, sku, quantity
-    `;
-    const values = [name.trim(), sku.trim(), qty, id];
-
-    const result = await pool.query(updateQuery, values);
+    const result = await pool.query(
+      `UPDATE products
+       SET name = $1, sku = $2
+       WHERE id = $3
+       RETURNING id, name, sku, quantity`,
+      [name, sku, id]
+    );
 
     if (result.rowCount === 0) {
       return res.status(404).json({ message: "Produit non trouvé." });
     }
 
-    const updated = result.rows[0];
-    return res.status(200).json(updated);
+    return res.status(200).json(result.rows[0]);
   } catch (err) {
     if (err.code === "23505") {
       return res
