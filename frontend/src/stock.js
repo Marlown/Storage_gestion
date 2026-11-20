@@ -6,3 +6,17 @@ export function stockStatus(product) {
   }
   return "ok";
 }
+
+// Normalise un texte pour la recherche : minuscules, sans accents
+export function normalize(text) {
+  return String(text).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
+// Le produit correspond-il à la recherche (nom ou SKU) ?
+export function matchesSearch(product, search) {
+  const q = normalize(search);
+  if (!q) return true;
+  return (
+    normalize(product.name).includes(q) || normalize(product.sku).includes(q)
+  );
+}

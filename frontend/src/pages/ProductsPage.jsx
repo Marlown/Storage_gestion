@@ -3,7 +3,7 @@ import { API_BASE_URL } from "../api";
 import MovementDialog from "../components/MovementDialog";
 import EditProductDialog from "../components/EditProductDialog";
 import StockSummary from "../components/StockSummary";
-import { stockStatus } from "../stock";
+import { matchesSearch, stockStatus } from "../stock";
 
 export default function ProductsPage({ onShowHistory }) {
   const [products, setProducts] = useState([]);
@@ -26,9 +26,13 @@ export default function ProductsPage({ onShowHistory }) {
   // n'afficher que les produits en rupture ou sous le seuil
   const [alertsOnly, setAlertsOnly] = useState(false);
 
-  const visibleProducts = alertsOnly
-    ? products.filter((p) => stockStatus(p) !== "ok")
-    : products;
+  // recherche par nom ou SKU
+  const [search, setSearch] = useState("");
+
+  const visibleProducts = products.filter(
+    (p) => matchesSearch(p, search) && (!alertsOnly || stockStatus(p) !== "ok"),
+  );
+  const isFiltered = search.trim() !== "" || alertsOnly;
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -266,23 +270,49 @@ export default function ProductsPage({ onShowHistory }) {
             <p>Aucun produit pour le moment.</p>
           ) : (
             <>
-              <label
+              <div
                 style={{
                   display: "flex",
-                  gap: "8px",
+                  flexWrap: "wrap",
+                  gap: "12px 24px",
                   alignItems: "center",
                   marginBottom: "12px",
                 }}
               >
                 <input
-                  type="checkbox"
-                  checked={alertsOnly}
-                  onChange={(e) => setAlertsOnly(e.target.checked)}
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="🔍 Rechercher par nom ou SKU…"
+                  aria-label="Rechercher un produit"
+                  style={{
+                    ...inputStyle,
+                    flex: "1 1 240px",
+                    maxWidth: "360px",
+                  }}
                 />
-                Afficher uniquement les produits en alerte
-              </label>
+                <label
+                  style={{ display: "flex", gap: "8px", alignItems: "center" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={alertsOnly}
+                    onChange={(e) => setAlertsOnly(e.target.checked)}
+                  />
+                  Uniquement les produits en alerte
+                </label>
+                {isFiltered && (
+                  <span style={{ opacity: 0.7, fontSize: "14px" }}>
+                    {visibleProducts.length} / {products.length} produit(s)
+                  </span>
+                )}
+              </div>
               {visibleProducts.length === 0 ? (
-                <p>Aucun produit en alerte 👍</p>
+                <p>
+                  {search.trim()
+                    ? `Aucun produit${alertsOnly ? " en alerte" : ""} ne correspond à « ${search.trim()} ».`
+                    : "Aucun produit en alerte 👍"}
+                </p>
               ) : (
                 <table
                   style={{
