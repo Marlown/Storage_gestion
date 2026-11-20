@@ -45,6 +45,7 @@ Application web de gestion de stock (quantité et qualité) pour une distributio
 | DELETE  | `/api/products/:id`         | Supprimer un produit (et ses mouvements) |
 | GET     | `/api/stocks/movements`     | Historique (`?productId=` optionnel) |
 | POST    | `/api/stocks/movements`     | Entrée/sortie (`productId`, `type` IN/OUT, `quantity`, `reason`) |
+| POST    | `/api/stocks/inventory`     | Inventaire (`productId`, `countedQuantity`, `note`) : crée l'ajustement de l'écart |
 
 ## Métriques métier (Prometheus)
 

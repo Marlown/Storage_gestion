@@ -139,4 +139,99 @@ router.post("/movements", async (req, res) => {
   }
 });
 
+// POST /api/stocks/inventory
+// Inventaire : on donne la quantité réellement comptée, le serveur calcule
+// l'écart avec le stock enregistré et crée le mouvement d'ajustement (IN ou OUT).
+// Le calcul se fait ici, sous verrou, pour rester juste même si un autre
+// mouvement a lieu pendant le comptage.
+router.post("/inventory", async (req, res) => {
+  const pid = Number(req.body.productId);
+  const counted = Number(req.body.countedQuantity);
+  const note = String(req.body.note ?? "").trim();
+
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return res
+      .status(400)
+      .json({ message: "Champ 'productId' invalide ou manquant." });
+  }
+  if (!Number.isInteger(counted) || counted < 0) {
+    return res.status(400).json({
+      message: "Champ 'countedQuantity' doit être un entier >= 0.",
+    });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const productResult = await client.query(
+      "SELECT id, quantity FROM products WHERE id = $1 FOR UPDATE",
+      [pid]
+    );
+    if (productResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Produit introuvable." });
+    }
+
+    const previousQuantity = productResult.rows[0].quantity;
+    const difference = counted - previousQuantity;
+
+    // stock déjà juste : rien à enregistrer
+    if (difference === 0) {
+      await client.query("ROLLBACK");
+      return res.status(200).json({
+        adjusted: false,
+        previousQuantity,
+        countedQuantity: counted,
+        difference: 0,
+        movement: null,
+      });
+    }
+
+    await client.query("UPDATE products SET quantity = $1 WHERE id = $2", [
+      counted,
+      pid,
+    ]);
+
+    const reason = note
+      ? `Ajustement d'inventaire : ${note}`
+      : "Ajustement d'inventaire";
+
+    const movementResult = await client.query(
+      `
+      INSERT INTO stock_movements (product_id, type, quantity, reason, new_quantity)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING
+        id,
+        product_id AS "productId",
+        type,
+        quantity,
+        reason,
+        new_quantity AS "newQuantity",
+        created_at AS "createdAt"
+      `,
+      [pid, difference > 0 ? "IN" : "OUT", Math.abs(difference), reason, counted]
+    );
+
+    await client.query("COMMIT");
+
+    return res.status(201).json({
+      adjusted: true,
+      previousQuantity,
+      countedQuantity: counted,
+      difference,
+      movement: movementResult.rows[0],
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Erreur sur POST /api/stocks/inventory :", err);
+    apiErrorCounter.labels("POST", "/api/stocks/inventory", "db").inc();
+    res
+      .status(500)
+      .json({ message: "Erreur interne sur l'ajustement d'inventaire" });
+  } finally {
+    client.release();
+  }
+});
+
 export default router;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { API_BASE_URL } from "../api";
 import MovementDialog from "../components/MovementDialog";
 import EditProductDialog from "../components/EditProductDialog";
+import InventoryDialog from "../components/InventoryDialog";
 import StockSummary from "../components/StockSummary";
 import { matchesSearch, stockStatus } from "../stock";
 
@@ -23,6 +24,9 @@ export default function ProductsPage({ onShowHistory }) {
   const [movement, setMovement] = useState(null);
   // produit en cours de modification
   const [editing, setEditing] = useState(null);
+  // produit en cours d'inventaire, et message de résultat affiché ensuite
+  const [inventory, setInventory] = useState(null);
+  const [inventoryNotice, setInventoryNotice] = useState("");
   // n'afficher que les produits en rupture ou sous le seuil
   const [alertsOnly, setAlertsOnly] = useState(false);
 
@@ -146,6 +150,18 @@ export default function ProductsPage({ onShowHistory }) {
         />
       )}
 
+      {inventory && (
+        <InventoryDialog
+          product={inventory}
+          onClose={() => setInventory(null)}
+          onDone={(result) => {
+            setInventoryNotice(inventoryMessage(inventory, result));
+            setInventory(null);
+            fetchProducts();
+          }}
+        />
+      )}
+
       {editing && (
         <EditProductDialog
           product={editing}
@@ -160,6 +176,35 @@ export default function ProductsPage({ onShowHistory }) {
       <h1 style={{ marginBottom: "16px" }}>📦 Produits en stock</h1>
 
       {!loading && !error && <StockSummary products={products} />}
+
+      {inventoryNotice && (
+        <p
+          role="status"
+          style={{
+            padding: "10px 14px",
+            borderRadius: "8px",
+            background: "rgba(124, 58, 237, 0.12)",
+            border: "1px solid rgba(124, 58, 237, 0.4)",
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "12px",
+          }}
+        >
+          <span>{inventoryNotice}</span>
+          <button
+            onClick={() => setInventoryNotice("")}
+            aria-label="Fermer le message"
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "inherit",
+            }}
+          >
+            ✕
+          </button>
+        </p>
+      )}
 
       {/* Formulaire d'ajout */}
       <section
@@ -384,6 +429,16 @@ export default function ProductsPage({ onShowHistory }) {
                             − Sortie
                           </button>
                           <button
+                            onClick={() => setInventory(p)}
+                            style={{
+                              ...actionButtonStyle,
+                              background: "#7c3aed",
+                            }}
+                            title="Saisir la quantité réellement comptée"
+                          >
+                            Inventaire
+                          </button>
+                          <button
                             onClick={() => onShowHistory(p.id)}
                             style={{
                               ...actionButtonStyle,
@@ -467,3 +522,12 @@ const rowStyle = {
   low: { background: "rgba(217, 119, 6, 0.12)" },
   ok: {},
 };
+
+// Message affiché après un inventaire
+function inventoryMessage(product, result) {
+  if (!result.adjusted) {
+    return `📋 Inventaire de « ${product.name} » : aucun écart, stock confirmé à ${result.countedQuantity}.`;
+  }
+  const diff = result.difference;
+  return `📋 Inventaire de « ${product.name} » : ${result.previousQuantity} → ${result.countedQuantity} (${diff > 0 ? "+" : "−"}${Math.abs(diff)}), ${diff > 0 ? "entrée" : "sortie"} d'ajustement enregistrée.`;
+}
