@@ -29,16 +29,24 @@ Application web de gestion de stock (quantité et qualité) pour une distributio
 | Prometheus | http://localhost:9090        |
 | Grafana    | http://localhost:3001 (admin / admin) |
 
-> Base déjà créée avant l'ajout du schéma ? Appliquez-le à la main :
-> `psql -h localhost -U stock_user -d stock_db -f backend/db/schema.sql`
+> **Base déjà existante, ou après un `git pull` qui modifie `schema.sql` :** relancez le schéma.
+> Il est rejouable sans risque (il n'ajoute que ce qui manque) :
+> ```bash
+> docker exec -i stock-postgres psql -U stock_user -d stock_db < backend/db/schema.sql
+> ```
 
 ## API
 
 | Méthode | Route                       | Description                         |
 |---------|-----------------------------|-------------------------------------|
 | GET     | `/api/products`             | Liste des produits                  |
-| POST    | `/api/products`             | Créer un produit (`name`, `sku`, `quantity` = stock initial, tracé en mouvement) |
-| PUT     | `/api/products/:id`         | Modifier le nom et le SKU (la quantité passe par les mouvements) |
+| POST    | `/api/products`             | Créer un produit (`name`, `sku`, `quantity` = stock initial, tracé en mouvement, `minQuantity` = seuil d'alerte) |
+| PUT     | `/api/products/:id`         | Modifier nom, SKU, seuil d'alerte (la quantité passe par les mouvements) |
 | DELETE  | `/api/products/:id`         | Supprimer un produit (et ses mouvements) |
 | GET     | `/api/stocks/movements`     | Historique (`?productId=` optionnel) |
 | POST    | `/api/stocks/movements`     | Entrée/sortie (`productId`, `type` IN/OUT, `quantity`, `reason`) |
+
+## Métriques métier (Prometheus)
+
+- `stock_products_count` : nombre de produits
+- `stock_products_low_count` : produits en rupture ou sous leur seuil d'alerte

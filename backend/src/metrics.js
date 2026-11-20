@@ -37,11 +37,18 @@ const productsCountGauge = new client.Gauge({
   help: "Nombre de produits connus par l'API",
 });
 
+// 🔹 Gauge métier : produits en alerte (rupture ou sous le seuil)
+const lowStockGauge = new client.Gauge({
+  name: "stock_products_low_count",
+  help: "Nombre de produits en rupture ou sous leur seuil d'alerte",
+});
+
 // Enregistrer les métriques dans le registre
 register.registerMetric(httpRequestDuration);
 register.registerMetric(httpRequestCounter);
 register.registerMetric(apiErrorCounter);
 register.registerMetric(productsCountGauge);
+register.registerMetric(lowStockGauge);
 
 export {
   register,
@@ -49,4 +56,5 @@ export {
   httpRequestCounter,
   apiErrorCounter,
   productsCountGauge,
+  lowStockGauge,
 };

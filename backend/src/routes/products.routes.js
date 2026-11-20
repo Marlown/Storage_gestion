@@ -1,6 +1,24 @@
 import express from "express";
 import pool from "../db.js";
-import { productsCountGauge, apiErrorCounter } from "../metrics.js";
+import {
+  productsCountGauge,
+  lowStockGauge,
+  apiErrorCounter,
+} from "../metrics.js";
+
+// En alerte : rupture, ou quantité au niveau du seuil ou en dessous
+const isLowStock = (p) =>
+  p.quantity === 0 || (p.minQuantity > 0 && p.quantity <= p.minQuantity);
+
+// Lit le seuil d'alerte ; renvoie null si invalide
+function parseMinQuantity(value) {
+  const n = Number(value ?? 0);
+  return Number.isInteger(n) && n >= 0 ? n : null;
+}
+
+const MIN_QTY_ERROR = {
+  message: "Le champ 'minQuantity' doit être un entier >= 0.",
+};
 
 const router = express.Router();
 
@@ -8,11 +26,12 @@ const router = express.Router();
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, name, sku, quantity FROM products ORDER BY id ASC"
+      'SELECT id, name, sku, quantity, min_quantity AS "minQuantity" FROM products ORDER BY id ASC'
     );
     const products = result.rows;
 
     productsCountGauge.set(products.length);
+    lowStockGauge.set(products.filter(isLowStock).length);
 
     res.json(products);
   } catch (err) {
@@ -29,6 +48,7 @@ router.post("/", async (req, res) => {
   const name = String(req.body.name ?? "").trim();
   const sku = String(req.body.sku ?? "").trim();
   const qty = Number(req.body.quantity ?? 0);
+  const minQty = parseMinQuantity(req.body.minQuantity);
 
   if (!name || !sku) {
     return res
@@ -40,16 +60,19 @@ router.post("/", async (req, res) => {
       .status(400)
       .json({ message: "Le champ 'quantity' doit être un entier >= 0." });
   }
+  if (minQty === null) {
+    return res.status(400).json(MIN_QTY_ERROR);
+  }
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
     const result = await client.query(
-      `INSERT INTO products (name, sku, quantity)
-       VALUES ($1, $2, $3)
-       RETURNING id, name, sku, quantity`,
-      [name, sku, qty]
+      `INSERT INTO products (name, sku, quantity, min_quantity)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, name, sku, quantity, min_quantity AS "minQuantity"`,
+      [name, sku, qty, minQty]
     );
     const newProduct = result.rows[0];
 
@@ -88,7 +111,8 @@ router.post("/", async (req, res) => {
 });
 
 // PUT /api/products/:id
-// Modifie le nom et le SKU uniquement : la quantité ne change que par des
+// Modifie le nom, le SKU et le seuil d'alerte (minQuantity, facultatif).
+// Ne modifie jamais la quantité : la quantité ne change que par des
 // mouvements de stock (POST /api/stocks/movements), pour garder un historique fiable.
 router.put("/:id", async (req, res) => {
   try {
@@ -98,19 +122,26 @@ router.put("/:id", async (req, res) => {
     }
     const name = String(req.body.name ?? "").trim();
     const sku = String(req.body.sku ?? "").trim();
+    const minQty =
+      req.body.minQuantity === undefined
+        ? undefined
+        : parseMinQuantity(req.body.minQuantity);
 
     if (!name || !sku) {
       return res
         .status(400)
         .json({ message: "Les champs 'name' et 'sku' sont obligatoires." });
     }
+    if (minQty === null) {
+      return res.status(400).json(MIN_QTY_ERROR);
+    }
 
     const result = await pool.query(
       `UPDATE products
-       SET name = $1, sku = $2
+       SET name = $1, sku = $2, min_quantity = COALESCE($4, min_quantity)
        WHERE id = $3
-       RETURNING id, name, sku, quantity`,
-      [name, sku, id]
+       RETURNING id, name, sku, quantity, min_quantity AS "minQuantity"`,
+      [name, sku, id, minQty ?? null]
     );
 
     if (result.rowCount === 0) {
@@ -143,7 +174,7 @@ router.delete("/:id", async (req, res) => {
     const deleteQuery = `
       DELETE FROM products
       WHERE id = $1
-      RETURNING id, name, sku, quantity
+      RETURNING id, name, sku, quantity, min_quantity AS "minQuantity"
     `;
     const result = await pool.query(deleteQuery, [id]);
 

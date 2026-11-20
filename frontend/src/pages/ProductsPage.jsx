@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { API_BASE_URL } from "../api";
 import MovementDialog from "../components/MovementDialog";
 import EditProductDialog from "../components/EditProductDialog";
+import StockSummary from "../components/StockSummary";
+import { stockStatus } from "../stock";
 
 export default function ProductsPage({ onShowHistory }) {
   const [products, setProducts] = useState([]);
@@ -12,6 +14,7 @@ export default function ProductsPage({ onShowHistory }) {
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [quantity, setQuantity] = useState(0);
+  const [minQuantity, setMinQuantity] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
@@ -20,6 +23,12 @@ export default function ProductsPage({ onShowHistory }) {
   const [movement, setMovement] = useState(null);
   // produit en cours de modification
   const [editing, setEditing] = useState(null);
+  // n'afficher que les produits en rupture ou sous le seuil
+  const [alertsOnly, setAlertsOnly] = useState(false);
+
+  const visibleProducts = alertsOnly
+    ? products.filter((p) => stockStatus(p) !== "ok")
+    : products;
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -68,6 +77,7 @@ export default function ProductsPage({ onShowHistory }) {
           name: name.trim(),
           sku: sku.trim(),
           quantity: Number(quantity) || 0,
+          minQuantity: Number(minQuantity) || 0,
         }),
       });
 
@@ -82,6 +92,7 @@ export default function ProductsPage({ onShowHistory }) {
       setName("");
       setSku("");
       setQuantity(0);
+      setMinQuantity(0);
 
       fetchProducts();
     } catch (err) {
@@ -95,7 +106,7 @@ export default function ProductsPage({ onShowHistory }) {
   // 🔧 SUPPRESSION
   async function handleDelete(product) {
     const confirmDelete = window.confirm(
-      `Supprimer le produit "${product.name}" ?`
+      `Supprimer le produit "${product.name}" ?`,
     );
     if (!confirmDelete) return;
 
@@ -143,6 +154,8 @@ export default function ProductsPage({ onShowHistory }) {
       )}
 
       <h1 style={{ marginBottom: "16px" }}>📦 Produits en stock</h1>
+
+      {!loading && !error && <StockSummary products={products} />}
 
       {/* Formulaire d'ajout */}
       <section
@@ -208,6 +221,23 @@ export default function ProductsPage({ onShowHistory }) {
             />
           </label>
 
+          <label
+            style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+          >
+            <span>Seuil d'alerte</span>
+            <input
+              type="number"
+              value={minQuantity}
+              onChange={(e) => setMinQuantity(e.target.value)}
+              style={inputStyle}
+              min={0}
+            />
+            <small style={{ opacity: 0.7 }}>
+              Alerte quand le stock descend à ce niveau (0 = alerte en rupture
+              uniquement)
+            </small>
+          </label>
+
           <button
             type="submit"
             disabled={submitting}
@@ -235,72 +265,125 @@ export default function ProductsPage({ onShowHistory }) {
           {products.length === 0 ? (
             <p>Aucun produit pour le moment.</p>
           ) : (
-            <table
-              style={{
-                borderCollapse: "collapse",
-                width: "100%",
-              }}
-            >
-              <thead>
-                <tr>
-                  <th style={thStyle}>ID</th>
-                  <th style={thStyle}>Nom</th>
-                  <th style={thStyle}>SKU</th>
-                  <th style={thStyle}>Quantité</th>
-                  <th style={thStyle}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((p) => (
-                  <tr key={p.id}>
-                    <td style={tdStyle}>{p.id}</td>
-                    <td style={tdStyle}>{p.name}</td>
-                    <td style={tdStyle}>{p.sku}</td>
-                    <td style={tdStyle}>{p.quantity}</td>
-                    <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                      <button
-                        onClick={() => setMovement({ product: p, type: "IN" })}
-                        style={{ ...actionButtonStyle, background: "#16a34a" }}
-                        title="Entrée de stock"
-                      >
-                        + Entrée
-                      </button>
-                      <button
-                        onClick={() => setMovement({ product: p, type: "OUT" })}
-                        style={{
-                          ...actionButtonStyle,
-                          background: "#ea580c",
-                          opacity: p.quantity === 0 ? 0.4 : 1,
-                          cursor: p.quantity === 0 ? "not-allowed" : "pointer",
-                        }}
-                        title={p.quantity === 0 ? "Stock vide" : "Sortie de stock"}
-                        disabled={p.quantity === 0}
-                      >
-                        − Sortie
-                      </button>
-                      <button
-                        onClick={() => onShowHistory(p.id)}
-                        style={{ ...actionButtonStyle, background: "#4b5563" }}
-                      >
-                        Historique
-                      </button>
-                      <button
-                        onClick={() => setEditing(p)}
-                        style={actionButtonStyle}
-                      >
-                        Modifier
-                      </button>
-                      <button
-                        onClick={() => handleDelete(p)}
-                        style={{ ...actionButtonStyle, background: "#dc2626" }}
-                      >
-                        Supprimer
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <>
+              <label
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  alignItems: "center",
+                  marginBottom: "12px",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={alertsOnly}
+                  onChange={(e) => setAlertsOnly(e.target.checked)}
+                />
+                Afficher uniquement les produits en alerte
+              </label>
+              {visibleProducts.length === 0 ? (
+                <p>Aucun produit en alerte 👍</p>
+              ) : (
+                <table
+                  style={{
+                    borderCollapse: "collapse",
+                    width: "100%",
+                  }}
+                >
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>ID</th>
+                      <th style={thStyle}>Nom</th>
+                      <th style={thStyle}>SKU</th>
+                      <th style={thStyle}>Quantité</th>
+                      <th style={thStyle}>Seuil</th>
+                      <th style={thStyle}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleProducts.map((p) => (
+                      <tr key={p.id} style={rowStyle[stockStatus(p)]}>
+                        <td style={tdStyle}>{p.id}</td>
+                        <td style={tdStyle}>{p.name}</td>
+                        <td style={tdStyle}>{p.sku}</td>
+                        <td style={tdStyle}>
+                          <strong>{p.quantity}</strong>{" "}
+                          {stockStatus(p) === "out" && (
+                            <span style={{ ...badge, background: "#dc2626" }}>
+                              Rupture
+                            </span>
+                          )}
+                          {stockStatus(p) === "low" && (
+                            <span style={{ ...badge, background: "#d97706" }}>
+                              Stock bas
+                            </span>
+                          )}
+                        </td>
+                        <td style={tdStyle}>{p.minQuantity || "—"}</td>
+                        <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                          <button
+                            onClick={() =>
+                              setMovement({ product: p, type: "IN" })
+                            }
+                            style={{
+                              ...actionButtonStyle,
+                              background: "#16a34a",
+                            }}
+                            title="Entrée de stock"
+                          >
+                            + Entrée
+                          </button>
+                          <button
+                            onClick={() =>
+                              setMovement({ product: p, type: "OUT" })
+                            }
+                            style={{
+                              ...actionButtonStyle,
+                              background: "#ea580c",
+                              opacity: p.quantity === 0 ? 0.4 : 1,
+                              cursor:
+                                p.quantity === 0 ? "not-allowed" : "pointer",
+                            }}
+                            title={
+                              p.quantity === 0
+                                ? "Stock vide"
+                                : "Sortie de stock"
+                            }
+                            disabled={p.quantity === 0}
+                          >
+                            − Sortie
+                          </button>
+                          <button
+                            onClick={() => onShowHistory(p.id)}
+                            style={{
+                              ...actionButtonStyle,
+                              background: "#4b5563",
+                            }}
+                          >
+                            Historique
+                          </button>
+                          <button
+                            onClick={() => setEditing(p)}
+                            style={actionButtonStyle}
+                          >
+                            Modifier
+                          </button>
+                          <button
+                            onClick={() => handleDelete(p)}
+                            style={{
+                              ...actionButtonStyle,
+                              background: "#dc2626",
+                            }}
+                          >
+                            Supprimer
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </>
           )}
         </>
       )}
@@ -336,4 +419,21 @@ const actionButtonStyle = {
   background: "#0f766e",
   color: "white",
   fontSize: "12px",
+};
+
+const badge = {
+  padding: "2px 8px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: 600,
+  color: "white",
+  marginLeft: "4px",
+};
+
+// fond des lignes selon le statut de stock (couleurs translucides : lisibles
+// en thème clair comme sombre)
+const rowStyle = {
+  out: { background: "rgba(220, 38, 38, 0.12)" },
+  low: { background: "rgba(217, 119, 6, 0.12)" },
+  ok: {},
 };
